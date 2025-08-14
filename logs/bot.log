@@ -1,0 +1,33 @@
+Running job Job(interval=30, unit=seconds, do=job, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=job, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=job, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=job, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=<lambda>, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=<lambda>, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=<lambda>, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=<lambda>, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=<lambda>, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=<lambda>, args=(), kwargs={})
+I am here.
+Quit
+Running job Job(interval=30, unit=seconds, do=<lambda>, args=(), kwargs={})
+I am here.
+Quit

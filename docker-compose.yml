@@ -1,12 +1,14 @@
-version: '3'
+version: "3"
 
 services:
-  selenium-bot:
+  embassy-bot:
     build: .
     container_name: selenium-bot
     environment:
       - SE_OPTS=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu
       - TZ=Europe/Moscow
+    env_file:
+      - .env
     volumes:
-      - ./logs:/app/logs  # Для сохранения логов
+      - ./logs:/app/logs # Для сохранения логов
       - ./src:/app/src

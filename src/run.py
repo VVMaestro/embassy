@@ -1,10 +1,13 @@
 from job import job_func
 import logging
+import load_env
 
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(name)s → %(levelname)s: %(message)s"
+    level=logging.INFO,
+    format="\n%(name)s → %(levelname)s: %(message)s\n"
 )
+
+load_env.load()
 
 run_logger = logging.getLogger('run')
 

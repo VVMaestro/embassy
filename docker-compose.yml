@@ -5,3 +5,6 @@ services:
     environment:
       - SE_OPTS=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu
       - TZ=Europe/Moscow
+    volumes:
+      - ./logs:/app/logs # Для сохранения логов
+      - ./src:/app/src

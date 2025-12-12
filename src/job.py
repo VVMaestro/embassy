@@ -17,7 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 def setup_driver():
     # Опции Chrome для headless-режима
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Безголовый режим
+    chrome_options.add_argument("--headless=new")  # Безголовый режим
     chrome_options.add_argument(
         "--no-sandbox"
     )  # Требуется для запуска в контейнерах/серверах

@@ -33,7 +33,9 @@ def setup_driver():
 
 
 def make_first_step(driver: WebDriver, logger: Logger):
-    form = driver.find_element(By.TAG_NAME, "form")
+    form = WebDriverWait(driver, 10).until(
+        expected_conditions.presence_of_element_located((By.TAG_NAME, "form"))
+    )
 
     name_input = form.find_element(By.ID, "Persons[0][first_name]")
 

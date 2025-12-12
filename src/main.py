@@ -16,8 +16,6 @@ logging.basicConfig(
 )
 
 schedule_logger = logging.getLogger("schedule")
-FileOutputHandler = logging.FileHandler("app/logs/bot.log")
-schedule_logger.addHandler(FileOutputHandler)
 
 schedule.every(30).seconds.do(lambda: job_func(schedule_logger))
 

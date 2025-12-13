@@ -13,6 +13,8 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
+from chrome_with_cleanup import ChromeWithFullCleanup
+
 
 def setup_driver():
     # Опции Chrome для headless-режима
@@ -24,6 +26,7 @@ def setup_driver():
     chrome_options.add_argument(
         "--disable-dev-shm-usage"
     )  # Для избежания ошибок памяти
+    chrome_options.add_argument("--single-process")
 
     # Инициализация драйвера
     driver = webdriver.Chrome(options=chrome_options)
@@ -275,13 +278,9 @@ async def notify_bot_with_message(message: str, logger: Logger):
 
 
 def process(logger: Logger):
-    driver: WebDriver | None = None
-
-    try:
+    with ChromeWithFullCleanup(headless=True) as driver:
         # Путь к ChromeDriver (уточните путь на вашем сервере)
         logger.debug("Устанавливаю путь до chromedriver")
-
-        driver = setup_driver()
 
         # Открытие страницы
         driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
@@ -293,11 +292,6 @@ def process(logger: Logger):
         make_second_step(driver, logger)
 
         make_third_step(driver, logger)
-    except Exception as e:
-        raise e
-    finally:
-        if driver is not None:
-            driver.quit()
 
 
 def find_date_in_rows(

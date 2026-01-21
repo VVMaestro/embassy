@@ -4,8 +4,6 @@ from datetime import date, datetime
 from logging import Logger
 
 import telegram
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
@@ -14,25 +12,6 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 from chrome_with_cleanup import ChromeWithFullCleanup
-
-
-def setup_driver():
-    # Опции Chrome для headless-режима
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")  # Безголовый режим
-    chrome_options.add_argument(
-        "--no-sandbox"
-    )  # Требуется для запуска в контейнерах/серверах
-    chrome_options.add_argument(
-        "--disable-dev-shm-usage"
-    )  # Для избежания ошибок памяти
-    chrome_options.add_argument("--single-process")
-
-    # Инициализация драйвера
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.set_window_size(1920, 1080)
-
-    return driver
 
 
 def make_first_step(driver: WebDriver, logger: Logger):

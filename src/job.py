@@ -1,5 +1,6 @@
 import asyncio
 import os
+from calendar import c
 from datetime import date, datetime
 from logging import Logger
 
@@ -11,7 +12,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
-from chrome_with_cleanup import ChromeWithFullCleanup
+from chrome_with_cleanup_fixed import ChromeWithProperCleanup
 
 
 def make_first_step(driver: WebDriver, logger: Logger):
@@ -49,11 +50,18 @@ def make_first_step(driver: WebDriver, logger: Logger):
         f"first step submit button discovered: {first_step_submit_btn.get_dom_attribute('name')}"
     )
 
-    name_input.send_keys("Ирина")
-    surname_input.send_keys("Панова")
-    email_input.send_keys("bmaecmpo@gmail.com")
-    email_repeat_input.send_keys("bmaecmpo@gmail.com")
-    phone_input.send_keys("+79224757702")
+    user_data = os.getenv("USER_FORM_DATA")
+
+    if user_data is None:
+        raise ValueError("USER_FORM_DATA environment variable is not set")
+
+    name, surname, email, phone = user_data.split(",")
+
+    name_input.send_keys(name)
+    surname_input.send_keys(surname)
+    email_input.send_keys(email)
+    email_repeat_input.send_keys(email)
+    phone_input.send_keys(phone)
 
     WebDriverWait(driver, 10).until(
         expected_conditions.element_to_be_clickable(first_step_submit_btn)
@@ -135,6 +143,8 @@ def make_second_step(driver: WebDriver, logger: Logger):
 
 def make_third_step(driver: WebDriver, logger: Logger):
     prefer_dates = get_prefer_dates()
+
+    logger.info(f"prefer_dates: {prefer_dates}")
 
     calendar = WebDriverWait(driver, 10).until(
         expected_conditions.presence_of_element_located((By.ID, "calendar-daygrid"))
@@ -257,7 +267,7 @@ async def notify_bot_with_message(message: str, logger: Logger):
 
 
 def process(logger: Logger):
-    with ChromeWithFullCleanup(headless=True) as driver:
+    with ChromeWithProperCleanup(headless=True, cleanup_timeout=5) as driver:
         # Путь к ChromeDriver (уточните путь на вашем сервере)
         logger.debug("Устанавливаю путь до chromedriver")
 
@@ -302,9 +312,10 @@ def find_date_in_rows(
 
             logger.info(f"Date of a col is {current_date}")
 
-            if col_class == "dot--grey":
-                available_dates.add(col_date)
-                logger.info(f"Date of a col is {col_date}")
+            if col_class is str and "cal-active" in col_class:
+                available_dates.add(current_date)
+
+                logger.info(f"Available date of a col is {current_date}")
 
                 if current_date >= prefer_dates[0] or current_date <= prefer_dates[1]:
                     logger.info(f"Date was found - {col_date}")

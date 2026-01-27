@@ -17,8 +17,11 @@ logging.basicConfig(
 
 schedule_logger = logging.getLogger("schedule")
 
-schedule.every(30).seconds.do(lambda: job_func(schedule_logger))
+period = int(os.getenv("SCHEDULER_PERIOD_IN_MINUTES", 1))
+
+schedule.every(period).minutes.do(lambda: job_func(schedule_logger))
 
 while True:
     schedule.run_pending()
+
     time.sleep(1)

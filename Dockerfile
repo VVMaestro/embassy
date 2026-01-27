@@ -23,4 +23,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV SE_OPTS="--headless --no-sandbox --disable-dev-shm-usage"
 
 # Запуск
-CMD ["tail", "-f", "/dev/null"]
+CMD ["python", "/app/main.py"]

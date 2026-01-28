@@ -10,9 +10,10 @@ from selenium.webdriver.chrome.options import Options
 class ChromeWithFullCleanup:
     """Context manager that kills ALL Chromium processes"""
 
-    def __init__(self, headless=True):
+    def __init__(self, headless=True, cleanup_timeout=10):
         self.headless = headless
         self.driver = None
+        self.cleanup_timeout = cleanup_timeout
         self.chrome_pids = set()  # Track Chrome PIDs
 
     def __enter__(self):
@@ -42,6 +43,8 @@ class ChromeWithFullCleanup:
         return self.driver
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        cleanup_success = False
+
         # Step 1: Normal Selenium cleanup
         if self.driver:
             try:
@@ -50,13 +53,14 @@ class ChromeWithFullCleanup:
                 pass
 
         # Step 2: Wait a bit for processes to terminate
-        time.sleep(1)
+        cleanup_success = self._wait_for_process_cleanup()
 
-        # Step 3: Force kill any remaining processes we spawned
-        self._kill_chrome_processes()
+        if not cleanup_success:
+            # Step 3: Force kill any remaining processes we spawned
+            self._kill_chrome_processes()
 
-        # Step 4: Final cleanup of any stragglers
-        self._force_kill_all_chrome()
+            # Step 4: Final cleanup of any stragglers
+            self._force_kill_all_chrome()
 
         return False  # Don't suppress exceptions
 
@@ -98,3 +102,28 @@ class ChromeWithFullCleanup:
                         os.kill(proc.info["pid"], signal.SIGKILL)  # Force kill
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
+
+    def _wait_for_process_cleanup(self) -> bool:
+        """Wait for all spawned processes to terminate."""
+        start_time = time.time()
+
+        while time.time() - start_time < self.cleanup_timeout:
+            # Check if any spawned processes are still running
+            running_pids = []
+
+            for pid in self.spawned_pids:
+                try:
+                    psutil.Process(pid)
+                    running_pids.append(pid)
+                except psutil.NoSuchProcess:
+                    pass  # Process is already dead
+
+            # If no processes are running, cleanup is complete
+            if not running_pids:
+                return True
+
+            # Wait a bit before checking again
+            time.sleep(0.2)
+
+        # Timeout reached, some processes still running
+        return False

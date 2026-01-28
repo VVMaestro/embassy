@@ -12,7 +12,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
-from chrome_with_cleanup_fixed import ChromeWithProperCleanup
+from chrome_with_cleanup import ChromeWithFullCleanup
 
 
 def make_first_step(driver: WebDriver, logger: Logger):
@@ -267,7 +267,7 @@ async def notify_bot_with_message(message: str, logger: Logger):
 
 
 def process(logger: Logger):
-    with ChromeWithProperCleanup(headless=True, cleanup_timeout=5) as driver:
+    with ChromeWithFullCleanup(headless=True, cleanup_timeout=5) as driver:
         # Путь к ChromeDriver (уточните путь на вашем сервере)
         logger.debug("Устанавливаю путь до chromedriver")
 

@@ -267,11 +267,11 @@ async def notify_bot_with_message(message: str, logger: Logger):
 
 
 def process(logger: Logger):
-    with ChromeWithFullCleanup(headless=True, cleanup_timeout=5) as driver:
-        # Путь к ChromeDriver (уточните путь на вашем сервере)
+    with ChromeWithFullCleanup(
+        headless=True, logger=logger, cleanup_timeout=5
+    ) as driver:
         logger.debug("Устанавливаю путь до chromedriver")
 
-        # Открытие страницы
         driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
 
         logger.info(f"Page was open: {driver.title}")

@@ -1,6 +1,7 @@
 import os
 import signal
 import time
+from logging import Logger
 
 import psutil
 from selenium import webdriver
@@ -8,10 +9,9 @@ from selenium.webdriver.chrome.options import Options
 
 
 class ChromeWithFullCleanup:
-    """Context manager that kills ALL Chromium processes"""
-
-    def __init__(self, headless=True, cleanup_timeout=10):
+    def __init__(self, logger: Logger, headless=True, cleanup_timeout=10):
         self.headless = headless
+        self.logger = logger
         self.driver = None
         self.cleanup_timeout = cleanup_timeout
         self.chrome_pids = set()  # Track Chrome PIDs
@@ -50,17 +50,13 @@ class ChromeWithFullCleanup:
             try:
                 self.driver.quit()  # Graceful shutdown
             except:
-                pass
+                self.logger.error("Failed to gracefully shutdown Chrome")
 
         # Step 2: Wait a bit for processes to terminate
         cleanup_success = self._wait_for_process_cleanup()
 
         if not cleanup_success:
-            # Step 3: Force kill any remaining processes we spawned
-            self._kill_chrome_processes()
-
-            # Step 4: Final cleanup of any stragglers
-            self._force_kill_all_chrome()
+            self.logger.info("Some Chrome processes still running")
 
         return False  # Don't suppress exceptions
 
@@ -75,33 +71,6 @@ class ChromeWithFullCleanup:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return pids
-
-    def _kill_chrome_processes(self):
-        """Kill processes spawned by this instance"""
-        for pid in self.spawned_pids:
-            try:
-                os.kill(pid, signal.SIGTERM)  # Graceful kill
-            except ProcessLookupError:
-                pass  # Process already dead
-            except Exception as e:
-                print(f"Error killing PID {pid}: {e}")
-
-    def _force_kill_all_chrome(self):
-        """Force kill any remaining Chrome processes"""
-        for proc in psutil.process_iter(["pid", "name"]):
-            try:
-                name = proc.info["name"] or ""
-                if any(
-                    keyword in name.lower()
-                    for keyword in ["chrome", "chromium", "chromedriver"]
-                ):
-                    try:
-                        proc.terminate()  # Try graceful first
-                        proc.wait(timeout=2)
-                    except:
-                        os.kill(proc.info["pid"], signal.SIGKILL)  # Force kill
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
 
     def _wait_for_process_cleanup(self) -> bool:
         """Wait for all spawned processes to terminate."""

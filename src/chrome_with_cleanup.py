@@ -39,7 +39,7 @@ class ChromeWithFullCleanup:
         current_pids = self._get_chrome_pids()
         self.spawned_pids = current_pids - self.chrome_pids
 
-        print(f"Spawned {len(self.spawned_pids)} Chrome processes")
+        self.logger.debug(f"Spawned {len(self.spawned_pids)} Chrome processes")
         return self.driver
 
     def __exit__(self, exc_type, exc_val, exc_tb):

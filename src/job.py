@@ -297,8 +297,6 @@ def find_date_in_rows(
         logger.info(f"Cols count is {len(cols)}")
 
         for col in cols:
-            logger.info(f"Current col is {col.tag_name}")
-
             col_class = col.get_attribute("class")
             col_date = col.get_attribute("data-date")
 
@@ -312,12 +310,18 @@ def find_date_in_rows(
 
             logger.info(f"Date of a col is {current_date}")
 
+            if current_date < prefer_dates[0]:
+                logger.debug(f"Date {current_date} is less than {prefer_dates[0]}")
+
+            if current_date > prefer_dates[1]:
+                logger.debug(f"Date {current_date} is greater than {prefer_dates[1]}")
+
             if col_class is str and "cal-active" in col_class:
                 available_dates.add(current_date)
 
                 logger.info(f"Available date of a col is {current_date}")
 
-                if current_date >= prefer_dates[0] or current_date <= prefer_dates[1]:
+                if current_date >= prefer_dates[0] and current_date <= prefer_dates[1]:
                     logger.info(f"Date was found - {col_date}")
                     chosen_date = col
 

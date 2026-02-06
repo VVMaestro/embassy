@@ -48,7 +48,7 @@ def make_first_step(driver: WebDriver, logger: Logger):
     )
 
     logger.info(
-        f"first step submit button discovered: {first_step_submit_btn.get_dom_attribute('name')}"
+        f"first step submit button discovered: {first_step_submit_btn.get_dom_attribute('class')}"
     )
 
     user_data = os.getenv("USER_FORM_DATA")
@@ -57,6 +57,8 @@ def make_first_step(driver: WebDriver, logger: Logger):
         raise ValueError("USER_FORM_DATA environment variable is not set")
 
     name, surname, email, phone = user_data.split(",")
+
+    logger.info(f"User data: {name}, {surname}, {email}, {phone}")
 
     name_input.send_keys(name)
     surname_input.send_keys(surname)
@@ -69,6 +71,8 @@ def make_first_step(driver: WebDriver, logger: Logger):
     ).click()
 
     logger.info(f"located to {driver.current_url}")
+
+    make_screenshot(driver, logger)
 
 
 def make_second_step(driver: WebDriver, logger: Logger):

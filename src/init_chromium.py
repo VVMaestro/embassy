@@ -11,9 +11,5 @@ def init_chromium(headless=True):
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
 
-    # Add these to help with cleanup
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-background-networking")
-
     # Create driver
     return webdriver.Chrome(options=options)

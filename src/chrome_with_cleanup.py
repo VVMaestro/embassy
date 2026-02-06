@@ -17,7 +17,7 @@ class ChromeWithFullCleanup:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Normal Selenium cleanup
-        if self.driver:
+        if len(self.driver.window_handles) > 1:
             try:
                 self.driver.close()
             except:

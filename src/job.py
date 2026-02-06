@@ -1,9 +1,7 @@
 import asyncio
 import os
-from calendar import c
 from datetime import date, datetime
 from logging import Logger
-from this import d
 
 import telegram
 from selenium.webdriver.chrome.webdriver import WebDriver
@@ -57,8 +55,6 @@ def make_first_step(driver: WebDriver, logger: Logger):
         raise ValueError("USER_FORM_DATA environment variable is not set")
 
     name, surname, email, phone = user_data.split(",")
-
-    logger.info(f"User data: {name}, {surname}, {email}, {phone}")
 
     name_input.send_keys(name)
     surname_input.send_keys(surname)
@@ -278,6 +274,7 @@ def process(logger: Logger, driver: WebDriver):
         logger=logger,
         driver=driver,
     ) as local_driver:
+        local_driver.switch_to.new_window("tab")
         local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
         logger.info(f"Page was open: {local_driver.title}")
         make_first_step(local_driver, logger)

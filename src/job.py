@@ -72,6 +72,8 @@ def make_first_step(driver: WebDriver, logger: Logger):
 
 
 def make_second_step(driver: WebDriver, logger: Logger):
+    logger.info("Starting second step")
+
     actions = ActionChains(driver)
 
     WebDriverWait(driver, 10).until(
@@ -79,6 +81,8 @@ def make_second_step(driver: WebDriver, logger: Logger):
     )
 
     second_step_form = driver.find_element(By.ID, "mfa-form2")
+
+    logger.info("Second step form found")
 
     select = second_step_form.find_element(
         By.XPATH, '//div/div/section/div/div/p[text()="Select service"]'

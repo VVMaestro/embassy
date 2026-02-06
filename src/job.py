@@ -278,7 +278,6 @@ def process(logger: Logger, driver: WebDriver):
         logger=logger,
         driver=driver,
     ) as local_driver:
-        logger.debug("Устанавливаю путь до chromedriver")
         local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
         logger.info(f"Page was open: {local_driver.title}")
         make_first_step(local_driver, logger)

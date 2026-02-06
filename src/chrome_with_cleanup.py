@@ -16,6 +16,8 @@ class ChromeWithFullCleanup:
         return self.driver
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.logger.info("Windows count: %s", len(self.driver.window_handles))
+
         try:
             self.driver.close()
         except:

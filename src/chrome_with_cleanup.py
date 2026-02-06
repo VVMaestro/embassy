@@ -16,8 +16,7 @@ class ChromeWithFullCleanup:
         return self.driver
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if len(self.driver.window_handles) > 1:
-            try:
-                self.driver.close()
-            except:
-                self.logger.error("Failed to close Chrome window")
+        try:
+            self.driver.close()
+        except:
+            self.logger.error("Failed to close Chrome window")

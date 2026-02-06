@@ -34,6 +34,7 @@ def init_shared_driver():
     if shared_driver is None:
         try:
             shared_driver = init_chromium(headless=True)
+            shared_driver.get("https://google.com")
             schedule_logger.info("Shared Chrome driver initialized")
         except Exception as e:
             schedule_logger.error(

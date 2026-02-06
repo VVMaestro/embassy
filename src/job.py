@@ -72,8 +72,6 @@ def make_first_step(driver: WebDriver, logger: Logger):
 
     logger.info(f"located to {driver.current_url}")
 
-    make_screenshot(driver, logger)
-
 
 def make_second_step(driver: WebDriver, logger: Logger):
     logger.info("Starting second step")

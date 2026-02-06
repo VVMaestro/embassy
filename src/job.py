@@ -3,6 +3,7 @@ import os
 from calendar import c
 from datetime import date, datetime
 from logging import Logger
+from this import d
 
 import telegram
 from selenium.webdriver.chrome.webdriver import WebDriver
@@ -266,21 +267,17 @@ async def notify_bot_with_message(message: str, logger: Logger):
     await bot.send_message(chat_id=bot_user_id, text=message)
 
 
-def process(logger: Logger):
+def process(logger: Logger, driver: WebDriver):
     with ChromeWithFullCleanup(
-        headless=True, logger=logger, cleanup_timeout=5
-    ) as driver:
+        logger=logger,
+        driver=driver,
+    ) as local_driver:
         logger.debug("Устанавливаю путь до chromedriver")
-
-        driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
-
-        logger.info(f"Page was open: {driver.title}")
-
-        make_first_step(driver, logger)
-
-        make_second_step(driver, logger)
-
-        make_third_step(driver, logger)
+        local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
+        logger.info(f"Page was open: {local_driver.title}")
+        make_first_step(local_driver, logger)
+        make_second_step(local_driver, logger)
+        make_third_step(local_driver, logger)
 
 
 def find_date_in_rows(
@@ -339,11 +336,11 @@ def find_date_in_rows(
     return chosen_date
 
 
-def job_func(logger: Logger):
+def job_func(logger: Logger, driver: WebDriver):
     try:
         logger.info("I am here.")
 
-        process(logger)
+        process(logger, driver)
     except Exception as e:
         logger.error(f"Error: {str(e)}")
     finally:

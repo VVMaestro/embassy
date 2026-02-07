@@ -11,6 +11,7 @@ class ChromeWithFullCleanup:
     ):
         self.logger = logger
         self.driver = driver
+        self.original_window_handle = self.driver.current_window_handle
 
     def __enter__(self):
         return self.driver
@@ -20,5 +21,6 @@ class ChromeWithFullCleanup:
 
         try:
             self.driver.close()
+            self.driver.switch_to.window(self.original_window_handle)
         except:
             self.logger.error("Failed to close Chrome window")

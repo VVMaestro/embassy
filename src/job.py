@@ -14,6 +14,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from chrome_with_cleanup import ChromeWithFullCleanup
 
 
+def process(logger: Logger, driver: WebDriver):
+    with ChromeWithFullCleanup(
+        logger=logger,
+        driver=driver,
+    ) as local_driver:
+        local_driver.switch_to.new_window("tab")
+        local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
+        logger.info(f"Page was open: {local_driver.title}")
+        make_first_step(local_driver, logger)
+        make_second_step(local_driver, logger)
+        make_third_step(local_driver, logger)
+
+
 def make_first_step(driver: WebDriver, logger: Logger):
     form = WebDriverWait(driver, 10).until(
         expected_conditions.presence_of_element_located((By.TAG_NAME, "form"))
@@ -56,10 +69,19 @@ def make_first_step(driver: WebDriver, logger: Logger):
 
     name, surname, email, phone = user_data.split(",")
 
+    name_input.clear()
     name_input.send_keys(name)
+
+    surname_input.clear()
     surname_input.send_keys(surname)
+
+    email_input.clear()
     email_input.send_keys(email)
+
+    email_repeat_input.clear()
     email_repeat_input.send_keys(email)
+
+    phone_input.clear()
     phone_input.send_keys(phone)
 
     WebDriverWait(driver, 10).until(
@@ -269,19 +291,6 @@ async def notify_bot_with_message(message: str, logger: Logger):
 
     bot = telegram.Bot(bot_cred)
     await bot.send_message(chat_id=bot_user_id, text=message)
-
-
-def process(logger: Logger, driver: WebDriver):
-    with ChromeWithFullCleanup(
-        logger=logger,
-        driver=driver,
-    ) as local_driver:
-        local_driver.switch_to.new_window("tab")
-        local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
-        logger.info(f"Page was open: {local_driver.title}")
-        make_first_step(local_driver, logger)
-        make_second_step(local_driver, logger)
-        make_third_step(local_driver, logger)
 
 
 def find_date_in_rows(

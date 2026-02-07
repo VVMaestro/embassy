@@ -94,8 +94,6 @@ def make_first_step(driver: WebDriver, logger: Logger):
 def make_second_step(driver: WebDriver, logger: Logger):
     logger.info("Starting second step")
 
-    make_screenshot(driver, logger)
-
     actions = ActionChains(driver)
 
     WebDriverWait(driver, 10).until(

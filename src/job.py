@@ -19,12 +19,20 @@ def process(logger: Logger, driver: WebDriver):
         logger=logger,
         driver=driver,
     ) as local_driver:
-        local_driver.switch_to.new_window("tab")
-        local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
-        logger.info(f"Page was open: {local_driver.title}")
-        make_first_step(local_driver, logger)
-        make_second_step(local_driver, logger)
-        make_third_step(local_driver, logger)
+        try:
+            local_driver.switch_to.new_window("tab")
+            local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
+            logger.info(f"Page was open: {local_driver.title}")
+            make_first_step(local_driver, logger)
+            make_second_step(local_driver, logger)
+            make_third_step(local_driver, logger)
+        except Exception as e:
+            raise e
+        finally:
+            logger.info("Quit")
+
+            if bool(os.getenv("SCREENSHOT_AFTER", 0)):
+                make_screenshot(local_driver, logger)
 
 
 def make_first_step(driver: WebDriver, logger: Logger):
@@ -272,7 +280,9 @@ async def notify_bot_with_screenshot(
         chat_id=bot_user_id, photo=screenshot, caption=f"screen_{datetime.now()}"
     )
     if additional_file:
-        await bot.send_document(chat_id=bot_user_id, document=additional_file)
+        await bot.send_document(
+            chat_id=bot_user_id, document=additional_file, filename="pagehtml.html"
+        )
 
 
 async def notify_bot_with_message(message: str, logger: Logger):

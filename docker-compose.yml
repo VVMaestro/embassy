@@ -10,3 +10,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./scripts:/app/scripts
+    deploy:
+      resources:
+        limits:
+          memory: 300M

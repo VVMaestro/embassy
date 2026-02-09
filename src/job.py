@@ -334,7 +334,7 @@ def find_date_in_rows(
             if current_date > prefer_dates[1]:
                 logger.info(f"Date {current_date} is greater than {prefer_dates[1]}")
 
-            if col_class is str and "cal-active" in col_class:
+            if col_class is not None and "cal-active" in col_class:
                 available_dates.add(current_date)
 
                 logger.info(f"Available date of a col is {current_date}")

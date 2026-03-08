@@ -2,7 +2,7 @@ import asyncio
 import os
 from datetime import date, datetime
 from logging import Logger
-
+import re
 import telegram
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.action_chains import ActionChains
@@ -23,9 +23,11 @@ def process(logger: Logger, driver: WebDriver):
             local_driver.switch_to.new_window("tab")
             local_driver.get("https://pieraksts.mfa.gov.lv/en/moscow/index")
             logger.info(f"Page was open: {local_driver.title}")
+            # Step 1, 2, 3, 4
             make_first_step(local_driver, logger)
             make_second_step(local_driver, logger)
             make_third_step(local_driver, logger)
+            make_fourth_step(local_driver, logger)
         except Exception as e:
             raise e
         finally:
@@ -242,6 +244,55 @@ def make_third_step(driver: WebDriver, logger: Logger):
     else:
         logger.info("Date was not chosen")
 
+def make_fourth_step(driver: WebDriver, logger: Logger):
+    """Select a time slot after 12:00 and confirm."""
+    logger.info("Starting fourth step: time selection")
+
+    # Wait for the page to load after date selection
+    WebDriverWait(driver, 10).until(
+        expected_conditions.presence_of_element_located((By.ID, "mfa-form4"))
+    )
+
+    # Find all time slot elements
+    # The structure may vary; adjust selectors based on actual page
+    time_slots = driver.find_elements(By.CSS_SELECTOR, ".service-group .text--subtitle")
+    logger.info(f"Found {len(time_slots)} time slot(s)")
+
+    chosen_slot = None
+    for slot in time_slots:
+        slot_text = slot.text.strip()
+        logger.info(f"Time slot text: {slot_text}")
+
+        # Parse time from text like "18. March, 2026 09:00"
+        match = re.search(r'(\d{1,2}):(\d{2})', slot_text)
+        if match:
+            hour = int(match.group(1))
+            minute = int(match.group(2))
+            if hour >= 12:  # Afternoon slot
+                chosen_slot = slot
+                logger.info(f"Selected afternoon slot: {slot_text}")
+                break
+            else:
+                logger.info(f"Skipping morning slot: {slot_text}")
+        else:
+            logger.warning(f"Could not parse time from: {slot_text}")
+
+    if chosen_slot is None:
+        logger.warning("No afternoon slot found; falling back to first available")
+        if time_slots:
+            chosen_slot = time_slots[0]
+            logger.info(f"Falling back to first slot: {chosen_slot.text}")
+        else:
+            raise Exception("No time slots found")
+
+    # Click the chosen slot (may open a dropdown or directly select)
+    chosen_slot.click()
+
+    # Click the Approve button
+    approve_btn = WebDriverWait(driver, 10).until(
+        expected_conditions.element_to_be_clickable((By.CLASS_NAME, "btn-next-step"))
+    )
+    approve_btn.click()
 
 def get_prefer_dates():
     dates_range = os.environ.get("PREFER_DATES")

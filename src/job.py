@@ -2,6 +2,7 @@ import asyncio
 import os
 from datetime import date, datetime
 from logging import Logger
+from this import d
 
 import telegram
 from selenium.webdriver.chrome.webdriver import WebDriver
@@ -234,9 +235,15 @@ def make_third_step(driver: WebDriver, logger: Logger):
         )
         step_3_next_btn = step_3_next.find_element(By.CLASS_NAME, "btn-next-step")
 
+        make_screenshot(driver, logger)
+
         WebDriverWait(driver, 10).until(
             expected_conditions.element_to_be_clickable(step_3_next_btn)
         ).click()
+
+        WebDriverWait(driver, 10).until(
+            expected_conditions.invisibility_of_element(step_3_next_btn)
+        )
 
         make_screenshot(driver, logger)
     else:

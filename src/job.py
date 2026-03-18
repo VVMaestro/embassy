@@ -2,6 +2,7 @@ import asyncio
 import os
 from datetime import date, datetime
 from logging import Logger
+import re
 from this import d
 
 import telegram
@@ -10,7 +11,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 
 from chrome_with_cleanup import ChromeWithFullCleanup
 
@@ -230,6 +231,13 @@ def make_third_step(driver: WebDriver, logger: Logger):
             expected_conditions.element_to_be_clickable(chosen_date)
         ).click()
 
+        # Select preferred time (after 12:00 if available, otherwise earlier)
+        try:
+            choose_time_after_noon(driver, logger, min_hour=12)
+        except Exception as e:
+            # If time select is not found / not ready, continue with default time
+            logger.warning(f"Could not select time automatically: {e}")
+
         step_3_next = WebDriverWait(driver, 10).until(
             expected_conditions.visibility_of_element_located((By.ID, "step3-next-btn"))
         )
@@ -248,6 +256,54 @@ def make_third_step(driver: WebDriver, logger: Logger):
         make_screenshot(driver, logger)
     else:
         logger.info("Date was not chosen")
+
+
+def choose_time_after_noon(driver: WebDriver, logger: Logger, min_hour: int = 12):
+    """Pick a time in the "Available times" <select>.
+
+    Prefers the earliest available time >= min_hour:00.
+    If none found, picks the earliest available time.
+
+    This is implemented defensively (page markup may change): we scan all
+    <select> elements and pick the one that contains HH:MM options.
+    """
+
+    logger.info("Trying to select a preferred time...")
+
+    time_re = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
+
+    def locate_time_select(drv: WebDriver):
+        for sel in drv.find_elements(By.TAG_NAME, "select"):
+            try:
+                option_els = sel.find_elements(By.TAG_NAME, "option")
+            except Exception:
+                continue
+
+            parsed = []
+            for opt in option_els:
+                text = (opt.text or "").strip()
+                m = time_re.match(text)
+                if not m:
+                    continue
+                hour = int(m.group(1))
+                minute = int(m.group(2))
+                parsed.append((hour, minute, text))
+
+            if parsed:
+                return sel, parsed
+
+        return None
+
+    sel, parsed = WebDriverWait(driver, 15).until(lambda d: locate_time_select(d))
+
+    # Prefer afternoon times; fallback to earliest time.
+    afternoon = sorted([t for t in parsed if t[0] >= min_hour], key=lambda x: (x[0], x[1]))
+    chosen = afternoon[0] if afternoon else sorted(parsed, key=lambda x: (x[0], x[1]))[0]
+
+    chosen_text = chosen[2]
+    logger.info(f"Selecting time option: {chosen_text}")
+
+    Select(sel).select_by_visible_text(chosen_text)
 
 
 def get_prefer_dates():

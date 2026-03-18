@@ -272,23 +272,43 @@ def choose_time_after_noon(driver: WebDriver, logger: Logger, min_hour: int = 12
 
     time_re = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
 
+    def parse_select(sel_el):
+        option_els = sel_el.find_elements(By.TAG_NAME, "option")
+        parsed = []
+        for opt in option_els:
+            text = (opt.text or "").strip()
+            m = time_re.match(text)
+            if not m:
+                continue
+            hour = int(m.group(1))
+            minute = int(m.group(2))
+            parsed.append((hour, minute, text))
+        return parsed
+
     def locate_time_select(drv: WebDriver):
+        # Based on provided HTML:
+        # <select name="ServiceGroups[0][visit_time]" class="time"> ...
+        preferred_selectors = [
+            "select[name='ServiceGroups[0][visit_time]']",
+            "#services select.time",
+            "select.time",
+        ]
+
+        for css in preferred_selectors:
+            for sel in drv.find_elements(By.CSS_SELECTOR, css):
+                try:
+                    parsed = parse_select(sel)
+                except Exception:
+                    continue
+                if parsed:
+                    return sel, parsed
+
+        # Fallback: any <select> that contains HH:MM options
         for sel in drv.find_elements(By.TAG_NAME, "select"):
             try:
-                option_els = sel.find_elements(By.TAG_NAME, "option")
+                parsed = parse_select(sel)
             except Exception:
                 continue
-
-            parsed = []
-            for opt in option_els:
-                text = (opt.text or "").strip()
-                m = time_re.match(text)
-                if not m:
-                    continue
-                hour = int(m.group(1))
-                minute = int(m.group(2))
-                parsed.append((hour, minute, text))
-
             if parsed:
                 return sel, parsed
 

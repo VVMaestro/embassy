@@ -4,19 +4,31 @@ import re
 from datetime import date, datetime
 from logging import Logger
 
-import telegram
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.webdriver import WebDriver
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions
-from selenium.webdriver.support.ui import Select, WebDriverWait
+from run_outcome import RunOutcome
 
-from chrome_with_cleanup import ChromeWithFullCleanup
+try:
+    from selenium.common.exceptions import TimeoutException
+    from selenium.webdriver.chrome.webdriver import WebDriver
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.remote.webelement import WebElement
+    from selenium.webdriver.support import expected_conditions
+    from selenium.webdriver.support.ui import Select, WebDriverWait
+
+    from chrome_with_cleanup import ChromeWithFullCleanup
+except ModuleNotFoundError:
+    TimeoutException = Exception
+    WebDriver = object
+    WebElement = object
+    ActionChains = None
+    By = None
+    expected_conditions = None
+    Select = None
+    WebDriverWait = None
+    ChromeWithFullCleanup = None
 
 
-def process(logger: Logger, driver: WebDriver):
+def process(logger: Logger, driver: WebDriver) -> RunOutcome:
     with ChromeWithFullCleanup(
         logger=logger,
         driver=driver,
@@ -29,6 +41,8 @@ def process(logger: Logger, driver: WebDriver):
             make_second_step(local_driver, logger)
             if make_third_step(local_driver, logger):
                 make_fourth_step(local_driver, logger)
+                return RunOutcome.APPROVED
+            return RunOutcome.NO_SLOT
         except Exception as e:
             raise e
         finally:
@@ -450,6 +464,8 @@ async def notify_bot_with_screenshot(
     additional_file: bytes | None = None,
     caption: str | None = None,
 ):
+    import telegram
+
     bot_cred = os.environ.get("EMBASSY_BOT")
     bot_user_id = os.environ.get("BOT_USER_ID")
 
@@ -474,6 +490,8 @@ async def notify_bot_with_screenshot(
 
 
 async def notify_bot_with_message(message: str, logger: Logger):
+    import telegram
+
     bot_cred = os.environ.get("EMBASSY_BOT")
     bot_user_id = os.environ.get("BOT_USER_ID")
 
@@ -549,8 +567,11 @@ def job_func(logger: Logger, driver: WebDriver):
     try:
         logger.info("I am here.")
 
-        process(logger, driver)
+        outcome = process(logger, driver)
+        logger.info("Run outcome: %s", outcome.value)
+        return outcome
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        return RunOutcome.FAILED
     finally:
         logger.info("Quit")

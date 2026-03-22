@@ -3,3 +3,5 @@
 .idea
 src/__pycache__/
 venv/
+tests/__pycache__/
+data/runtime_state.json

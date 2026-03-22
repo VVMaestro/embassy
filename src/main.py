@@ -1,121 +1,63 @@
 import logging
 import os
-import threading
-import time
-from threading import Lock, Thread
-from typing import Dict
+from threading import Event, Thread
 
 import schedule
 
 import load_env
-from init_chromium import init_chromium
-from job import job_func
+from bot_control import TelegramControlServer
+from runtime_state import RuntimeStateStore, default_state_path
+from scheduler_controller import SchedulerController
 
 load_env.load()
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.DEBUG if os.getenv("LOG_LEVEL") == "DEBUG" else logging.INFO,
-    format="\n%(name)s → %(levelname)s: %(message)s\n",
-)
 
-schedule_logger = logging.getLogger("schedule")
-
-active_threads: Dict[int, Thread] = {}
-thread_lock = threading.Lock()  # For thread-safe operations
-driver_lock = Lock()  # For sequential driver access
-shared_driver = None
+def configure_logging():
+    logging.basicConfig(
+        level=logging.DEBUG if os.getenv("LOG_LEVEL") == "DEBUG" else logging.INFO,
+        format="\n%(name)s → %(levelname)s: %(message)s\n",
+    )
 
 
-def init_shared_driver():
-    """Initialize the shared Chrome driver instance"""
-    global shared_driver
-
-    if shared_driver is None:
-        try:
-            shared_driver = init_chromium(headless=True)
-            shared_driver.get("https://google.com")
-            schedule_logger.info("Shared Chrome driver initialized")
-        except Exception as e:
-            schedule_logger.error(
-                f"Failed to initialize shared Chrome driver: {str(e)}"
-            )
-            shared_driver = None
-
-
-def worker_thread(thread_id: int):
-    """Worker function that runs the job with shared driver"""
-    global shared_driver
-
-    try:
-        # Create a logger for this thread
-        thread_logger = logging.getLogger(f"thread_{thread_id}")
-
-        # Check if driver is available
-        if shared_driver is None:
-            thread_logger.error("Shared driver is not available")
-            return
-
-        # Acquire driver lock for exclusive access
-        with driver_lock:
-            schedule_logger.info(f"Thread {thread_id} acquired driver lock")
-
-            # Run the job with shared driver
-            job_func(thread_logger, shared_driver)
-
-            schedule_logger.info(f"Thread {thread_id} released driver lock")
-
-        # Mark thread as completed
-        with thread_lock:
-            if thread_id in active_threads:
-                del active_threads[thread_id]
-
-        schedule_logger.info(f"Thread {thread_id} completed successfully")
-
-    except Exception as e:
-        schedule_logger.error(f"Thread {thread_id} failed with error: {str(e)}")
-        # Clean up thread reference on error
-        with thread_lock:
-            if thread_id in active_threads:
-                del active_threads[thread_id]
-
-
-def start_run_process():
-    try:
-        # Initialize shared driver if not already done
-        init_shared_driver()
-
-        # Generate thread ID
-        thread_id = len(active_threads) + 1
-
-        # Create and start thread
-        thread = Thread(target=worker_thread, args=(thread_id,), daemon=True)
-        thread.start()
-
-        # Track active thread
-        with thread_lock:
-            active_threads[thread_id] = thread
-
-        schedule_logger.info(f"Started worker thread {thread_id}")
-
-    except Exception as e:
-        schedule_logger.error(f"Failed to start worker thread: {str(e)}")
-
-
-period = int(os.getenv("SCHEDULER_PERIOD_IN_MINUTES", 1))
-
-schedule.every(period).minutes.do(start_run_process)
-
-
-def run_scheduler():
-    """Run the scheduler loop - for manual testing"""
-    while True:
+def run_scheduler(stop_event: Event):
+    while not stop_event.is_set():
         schedule.run_pending()
-        time.sleep(1)
+        stop_event.wait(1)
 
 
-# Only run scheduler if this file is executed directly
+def main():
+    configure_logging()
+
+    schedule_logger = logging.getLogger("schedule")
+    state_store = RuntimeStateStore(
+        os.getenv("BOT_STATE_PATH", default_state_path()),
+        logging.getLogger("runtime_state"),
+    )
+    controller = SchedulerController(state_store, schedule_logger)
+    control_server = TelegramControlServer(
+        state_store=state_store,
+        logger=logging.getLogger("telegram_control"),
+    )
+
+    period = int(os.getenv("SCHEDULER_PERIOD_IN_MINUTES", 1))
+    schedule.every(period).minutes.do(controller.start_run_process)
+
+    stop_event = Event()
+    scheduler_thread = Thread(
+        target=run_scheduler,
+        args=(stop_event,),
+        daemon=True,
+        name="scheduler",
+    )
+    scheduler_thread.start()
+
+    try:
+        control_server.run()
+    finally:
+        stop_event.set()
+        controller.shutdown()
+        scheduler_thread.join(timeout=5)
+
+
 if __name__ == "__main__":
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    main()

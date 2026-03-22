@@ -2,11 +2,13 @@ services:
   embassy-bot:
     build: .
     container_name: selenium-bot
-    environment:
-      - SE_OPTS=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu
-      - TZ=Europe/Moscow
     env_file:
       - .env
+    environment:
+      - BOT_STATE_PATH=/app/data/runtime_state.json
+      - SE_OPTS=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu
+      - TZ=Europe/Moscow
     volumes:
+      - ./data:/app/data
       - ./src:/app/src
       - ./scripts:/app/scripts

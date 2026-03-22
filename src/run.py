@@ -2,8 +2,8 @@ import logging
 import os
 
 import load_env
+from init_chromium import init_chromium
 from job import job_func
-from src.init_chromium import init_chromium
 
 load_env.load()
 

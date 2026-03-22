@@ -1,17 +1,17 @@
 import asyncio
 import os
+import re
 from datetime import date, datetime
 from logging import Logger
-import re
-from this import d
 
 import telegram
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions
-from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from chrome_with_cleanup import ChromeWithFullCleanup
 
@@ -27,7 +27,8 @@ def process(logger: Logger, driver: WebDriver):
             logger.info(f"Page was open: {local_driver.title}")
             make_first_step(local_driver, logger)
             make_second_step(local_driver, logger)
-            make_third_step(local_driver, logger)
+            if make_third_step(local_driver, logger):
+                make_fourth_step(local_driver, logger)
         except Exception as e:
             raise e
         finally:
@@ -176,7 +177,7 @@ def make_second_step(driver: WebDriver, logger: Logger):
     ).click()
 
 
-def make_third_step(driver: WebDriver, logger: Logger):
+def make_third_step(driver: WebDriver, logger: Logger) -> bool:
     prefer_dates = get_prefer_dates()
 
     logger.info(f"prefer_dates: {prefer_dates}")
@@ -254,20 +255,105 @@ def make_third_step(driver: WebDriver, logger: Logger):
         )
 
         make_screenshot(driver, logger)
+        return True
     else:
         logger.info("Date was not chosen")
+        return False
+
+
+def make_fourth_step(driver: WebDriver, logger: Logger):
+    logger.info("Starting fourth step")
+
+    try:
+        final_form = WebDriverWait(driver, 10).until(
+            expected_conditions.presence_of_element_located((By.ID, "mfa-form4"))
+        )
+
+        logger.info(f"Fourth step form found: {final_form.get_attribute('id')}")
+        final_page_url = driver.current_url
+
+        checkbox = final_form.find_element(By.ID, "personal-data")
+
+        logger.info(
+            f"final step checkbox discovered: {checkbox.get_dom_attribute('id')}"
+        )
+
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center'});", checkbox
+        )
+
+        checkbox_selected = False
+
+        try:
+            WebDriverWait(driver, 5).until(
+                expected_conditions.element_to_be_clickable(checkbox)
+            ).click()
+            WebDriverWait(driver, 3).until(
+                lambda current_driver: current_driver.find_element(
+                    By.ID, "personal-data"
+                ).is_selected()
+            )
+            checkbox_selected = True
+        except Exception as checkbox_error:
+            logger.warning(f"Direct checkbox click failed: {checkbox_error}")
+
+        if not checkbox_selected:
+            gdpr_wrapper = final_form.find_element(By.ID, "gdpr")
+            confirmation = gdpr_wrapper.find_element(By.CLASS_NAME, "form-checkbox")
+
+            logger.info(
+                "Falling back to checkbox wrapper click: %s",
+                confirmation.get_attribute("class"),
+            )
+
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center'});", confirmation
+            )
+
+            WebDriverWait(driver, 10).until(
+                expected_conditions.element_to_be_clickable(confirmation)
+            ).click()
+
+            WebDriverWait(driver, 10).until(
+                lambda current_driver: current_driver.find_element(
+                    By.ID, "personal-data"
+                ).is_selected()
+            )
+
+        logger.info("Final step checkbox confirmed")
+
+        approve_button = final_form.find_element(By.CLASS_NAME, "btn-next-step")
+
+        logger.info(f"approve button discovered: {approve_button.text}")
+
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center'});", approve_button
+        )
+
+        WebDriverWait(driver, 10).until(
+            expected_conditions.element_to_be_clickable(approve_button)
+        ).click()
+
+        logger.info("Approve button clicked")
+
+        WebDriverWait(driver, 20).until(
+            lambda current_driver: has_left_final_step(current_driver, final_page_url)
+        )
+
+        logger.info("Final submission progressed away from step 4")
+        make_screenshot(
+            driver,
+            logger,
+            caption=f"Approve succeeded at {datetime.now():%Y-%m-%d %H:%M:%S}",
+        )
+    except Exception as error:
+        if isinstance(error, TimeoutException):
+            logger.error(f"Fourth step timed out: {error}")
+        make_screenshot(driver, logger)
+        raise
 
 
 def choose_time_after_noon(driver: WebDriver, logger: Logger, min_hour: int = 12):
-    """Pick a time in the "Available times" <select>.
-
-    Prefers the earliest available time >= min_hour:00.
-    If none found, picks the earliest available time.
-
-    This is implemented defensively (page markup may change): we scan all
-    <select> elements and pick the one that contains HH:MM options.
-    """
-
     logger.info("Trying to select a preferred time...")
 
     time_re = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*$")
@@ -286,8 +372,6 @@ def choose_time_after_noon(driver: WebDriver, logger: Logger, min_hour: int = 12
         return parsed
 
     def locate_time_select(drv: WebDriver):
-        # Based on provided HTML:
-        # <select name="ServiceGroups[0][visit_time]" class="time"> ...
         preferred_selectors = [
             "select[name='ServiceGroups[0][visit_time]']",
             "#services select.time",
@@ -317,13 +401,29 @@ def choose_time_after_noon(driver: WebDriver, logger: Logger, min_hour: int = 12
     sel, parsed = WebDriverWait(driver, 15).until(lambda d: locate_time_select(d))
 
     # Prefer afternoon times; fallback to earliest time.
-    afternoon = sorted([t for t in parsed if t[0] >= min_hour], key=lambda x: (x[0], x[1]))
-    chosen = afternoon[0] if afternoon else sorted(parsed, key=lambda x: (x[0], x[1]))[0]
+    afternoon = sorted(
+        [t for t in parsed if t[0] >= min_hour], key=lambda x: (x[0], x[1])
+    )
+    chosen = (
+        afternoon[0] if afternoon else sorted(parsed, key=lambda x: (x[0], x[1]))[0]
+    )
 
     chosen_text = chosen[2]
     logger.info(f"Selecting time option: {chosen_text}")
 
     Select(sel).select_by_visible_text(chosen_text)
+
+
+def has_left_final_step(driver: WebDriver, final_page_url: str) -> bool:
+    if driver.current_url != final_page_url:
+        return True
+
+    final_forms = driver.find_elements(By.ID, "mfa-form4")
+
+    if not final_forms:
+        return True
+
+    return not final_forms[0].is_displayed()
 
 
 def get_prefer_dates():
@@ -337,15 +437,18 @@ def get_prefer_dates():
     return date.fromisoformat(date_strings[0]), date.fromisoformat(date_strings[1])
 
 
-def make_screenshot(driver: WebDriver, logger: Logger):
+def make_screenshot(driver: WebDriver, logger: Logger, caption: str | None = None):
     screenshot = driver.get_screenshot_as_png()
     html = driver.page_source.encode("utf-8")
 
-    asyncio.run(notify_bot_with_screenshot(screenshot, logger, html))
+    asyncio.run(notify_bot_with_screenshot(screenshot, logger, html, caption))
 
 
 async def notify_bot_with_screenshot(
-    screenshot: bytes, logger: Logger, additional_file: bytes | None = None
+    screenshot: bytes,
+    logger: Logger,
+    additional_file: bytes | None = None,
+    caption: str | None = None,
 ):
     bot_cred = os.environ.get("EMBASSY_BOT")
     bot_user_id = os.environ.get("BOT_USER_ID")
@@ -360,7 +463,9 @@ async def notify_bot_with_screenshot(
 
     bot = telegram.Bot(bot_cred)
     await bot.send_photo(
-        chat_id=bot_user_id, photo=screenshot, caption=f"screen_{datetime.now()}"
+        chat_id=bot_user_id,
+        photo=screenshot,
+        caption=caption or f"screen_{datetime.now()}",
     )
     if additional_file:
         await bot.send_document(

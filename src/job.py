@@ -4,28 +4,16 @@ import re
 from datetime import date, datetime
 from logging import Logger
 
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.ui import Select, WebDriverWait
+
+from chrome_with_cleanup import ChromeWithFullCleanup
 from run_outcome import RunOutcome
-
-try:
-    from selenium.common.exceptions import TimeoutException
-    from selenium.webdriver.chrome.webdriver import WebDriver
-    from selenium.webdriver.common.action_chains import ActionChains
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.remote.webelement import WebElement
-    from selenium.webdriver.support import expected_conditions
-    from selenium.webdriver.support.ui import Select, WebDriverWait
-
-    from chrome_with_cleanup import ChromeWithFullCleanup
-except ModuleNotFoundError:
-    TimeoutException = Exception
-    WebDriver = object
-    WebElement = object
-    ActionChains = None
-    By = None
-    expected_conditions = None
-    Select = None
-    WebDriverWait = None
-    ChromeWithFullCleanup = None
 
 
 def process(logger: Logger, driver: WebDriver) -> RunOutcome:
@@ -410,9 +398,12 @@ def choose_time_after_noon(driver: WebDriver, logger: Logger, min_hour: int = 12
             if parsed:
                 return sel, parsed
 
-        return None
+        return None, None
 
     sel, parsed = WebDriverWait(driver, 15).until(lambda d: locate_time_select(d))
+
+    if sel is None or parsed is None:
+        return
 
     # Prefer afternoon times; fallback to earliest time.
     afternoon = sorted(

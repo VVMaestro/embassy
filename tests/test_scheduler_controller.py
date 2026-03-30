@@ -2,6 +2,7 @@ import logging
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from src.job import RunOutcome
 from src.runtime_state import RuntimeStateStore
@@ -81,6 +82,39 @@ class SchedulerControllerTests(unittest.TestCase):
 
         state = self.store.get_state()
         self.assertTrue(state.enabled)
+
+    def test_captcha_failed_outcome_keeps_bot_enabled(self):
+        controller = SchedulerController(
+            state_store=self.store,
+            logger=self.logger,
+            driver_factory=lambda headless=True: FakeDriver(),
+            job_runner=lambda logger, driver: RunOutcome.CAPTCHA_FAILED,
+        )
+
+        controller.init_shared_driver()
+        controller.worker_thread(1)
+
+        state = self.store.get_state()
+        self.assertTrue(state.enabled)
+
+    def test_manual_captcha_mode_uses_visible_browser(self):
+        driver_options = []
+
+        def driver_factory(headless=True):
+            driver_options.append(headless)
+            return FakeDriver()
+
+        controller = SchedulerController(
+            state_store=self.store,
+            logger=self.logger,
+            driver_factory=driver_factory,
+            job_runner=lambda logger, driver: RunOutcome.NO_SLOT,
+        )
+
+        with patch.dict(os.environ, {"CAPTCHA_PROVIDER": "manual"}, clear=False):
+            controller.init_shared_driver()
+
+        self.assertEqual(driver_options, [False])
 
 
 if __name__ == "__main__":

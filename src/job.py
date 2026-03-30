@@ -1,6 +1,8 @@
 import asyncio
+import html
 import os
 import re
+import time
 from datetime import date, datetime
 from logging import Logger
 
@@ -28,8 +30,7 @@ def process(logger: Logger, driver: WebDriver) -> RunOutcome:
             make_first_step(local_driver, logger)
             make_second_step(local_driver, logger)
             if make_third_step(local_driver, logger):
-                make_fourth_step(local_driver, logger)
-                return RunOutcome.APPROVED
+                return make_fourth_step(local_driver, logger)
             return RunOutcome.NO_SLOT
         except Exception as e:
             raise e
@@ -246,7 +247,7 @@ def make_third_step(driver: WebDriver, logger: Logger) -> bool:
         )
         step_3_next_btn = step_3_next.find_element(By.CLASS_NAME, "btn-next-step")
 
-        make_screenshot(driver, logger)
+        make_screenshot(driver, logger, "Time selected")
 
         WebDriverWait(driver, 10).until(
             expected_conditions.element_to_be_clickable(step_3_next_btn)
@@ -256,103 +257,355 @@ def make_third_step(driver: WebDriver, logger: Logger) -> bool:
             expected_conditions.invisibility_of_element(step_3_next_btn)
         )
 
-        make_screenshot(driver, logger)
+        make_screenshot(driver, logger, "Step 3 Successed")
         return True
     else:
         logger.info("Date was not chosen")
         return False
 
 
-def make_fourth_step(driver: WebDriver, logger: Logger):
+def make_fourth_step(driver: WebDriver, logger: Logger) -> RunOutcome:
     logger.info("Starting fourth step")
 
     try:
         final_form = WebDriverWait(driver, 10).until(
             expected_conditions.presence_of_element_located((By.ID, "mfa-form4"))
         )
-
         logger.info(f"Fourth step form found: {final_form.get_attribute('id')}")
+        captcha_provider = get_captcha_provider()
+        if captcha_provider != "manual":
+            raise RuntimeError(
+                f"Unsupported CAPTCHA_PROVIDER value: {captcha_provider}. Only 'manual' is supported."
+            )
+
         final_page_url = driver.current_url
+        manual_timeout_sec = get_manual_captcha_timeout_sec()
 
-        checkbox = final_form.find_element(By.ID, "personal-data")
-
-        logger.info(
-            f"final step checkbox discovered: {checkbox.get_dom_attribute('id')}"
-        )
-
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center'});", checkbox
-        )
-
-        checkbox_selected = False
-
-        try:
-            WebDriverWait(driver, 5).until(
-                expected_conditions.element_to_be_clickable(checkbox)
-            ).click()
-            WebDriverWait(driver, 3).until(
-                lambda current_driver: current_driver.find_element(
-                    By.ID, "personal-data"
-                ).is_selected()
+        for attempt in range(1, 3):
+            final_form = WebDriverWait(driver, 10).until(
+                expected_conditions.presence_of_element_located((By.ID, "mfa-form4"))
             )
-            checkbox_selected = True
-        except Exception as checkbox_error:
-            logger.warning(f"Direct checkbox click failed: {checkbox_error}")
 
-        if not checkbox_selected:
-            gdpr_wrapper = final_form.find_element(By.ID, "gdpr")
-            confirmation = gdpr_wrapper.find_element(By.CLASS_NAME, "form-checkbox")
+            ensure_final_checkbox_selected(driver, final_form, logger)
 
-            logger.info(
-                "Falling back to checkbox wrapper click: %s",
-                confirmation.get_attribute("class"),
-            )
+            if attempt == 1:
+                make_screenshot(driver, logger, "Checkbox selected")
+
+            if has_recaptcha_widget(final_form):
+                previous_token = ""
+                if attempt > 1:
+                    previous_token = get_recaptcha_response_value(driver)
+                notify_manual_captcha_required(
+                    driver,
+                    logger,
+                    attempt=attempt,
+                    timeout_sec=manual_timeout_sec,
+                )
+                solved_token = wait_for_manual_captcha_solution(
+                    driver,
+                    timeout_sec=manual_timeout_sec,
+                    previous_token=previous_token,
+                )
+
+                if not solved_token:
+                    error_text = (
+                        "Manual captcha was not solved within "
+                        f"{format_timeout_window(manual_timeout_sec)}"
+                    )
+                    logger.warning(error_text)
+                    notify_step4_failure(logger, error_text)
+                    make_screenshot(driver, logger, caption=error_text)
+                    return RunOutcome.CAPTCHA_FAILED
+
+            approve_button = final_form.find_element(By.CLASS_NAME, "btn-next-step")
+            logger.info(f"approve button discovered: {approve_button.text}")
 
             driver.execute_script(
-                "arguments[0].scrollIntoView({block: 'center'});", confirmation
+                "arguments[0].scrollIntoView({block: 'center'});", approve_button
             )
-
             WebDriverWait(driver, 10).until(
-                expected_conditions.element_to_be_clickable(confirmation)
+                expected_conditions.element_to_be_clickable(approve_button)
             ).click()
 
-            WebDriverWait(driver, 10).until(
-                lambda current_driver: current_driver.find_element(
-                    By.ID, "personal-data"
-                ).is_selected()
+            logger.info("Approve button clicked on attempt %s", attempt)
+            make_screenshot(driver, logger, f"Approve button clicked (attempt {attempt})")
+
+            outcome, error_text = wait_for_final_submission_result(driver, final_page_url)
+
+            if outcome == RunOutcome.APPROVED:
+                logger.info("Final submission progressed away from step 4")
+                make_screenshot(
+                    driver,
+                    logger,
+                    caption=f"Approve succeeded at {datetime.now():%Y-%m-%d %H:%M:%S}",
+                )
+                return outcome
+
+            logger.warning(
+                "Fourth step stayed on page after attempt %s: %s",
+                attempt,
+                error_text or outcome.value,
             )
 
-        logger.info("Final step checkbox confirmed")
+            if outcome == RunOutcome.CAPTCHA_FAILED and attempt == 1:
+                logger.warning(
+                    "Captcha verification failed after manual solve; waiting for a refreshed captcha"
+                )
+                continue
 
-        approve_button = final_form.find_element(By.CLASS_NAME, "btn-next-step")
+            notify_step4_failure(logger, error_text or outcome.value)
+            make_screenshot(
+                driver,
+                logger,
+                caption=f"Fourth step failed: {error_text or outcome.value}",
+            )
+            return outcome
 
-        logger.info(f"approve button discovered: {approve_button.text}")
-
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block: 'center'});", approve_button
-        )
-
-        WebDriverWait(driver, 10).until(
-            expected_conditions.element_to_be_clickable(approve_button)
-        ).click()
-
-        logger.info("Approve button clicked")
-
-        WebDriverWait(driver, 20).until(
-            lambda current_driver: has_left_final_step(current_driver, final_page_url)
-        )
-
-        logger.info("Final submission progressed away from step 4")
-        make_screenshot(
-            driver,
-            logger,
-            caption=f"Approve succeeded at {datetime.now():%Y-%m-%d %H:%M:%S}",
-        )
+        raise RuntimeError("Fourth step finished without returning an outcome")
     except Exception as error:
         if isinstance(error, TimeoutException):
             logger.error(f"Fourth step timed out: {error}")
+        else:
+            logger.error("Fourth step failed with error: %s", error)
+
+        notify_step4_failure(logger, str(error))
         make_screenshot(driver, logger)
         raise
+
+
+def ensure_final_checkbox_selected(
+    driver: WebDriver, final_form: WebElement, logger: Logger
+):
+    checkbox = final_form.find_element(By.ID, "personal-data")
+    logger.info(f"final step checkbox discovered: {checkbox.get_dom_attribute('id')}")
+
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", checkbox)
+
+    if checkbox.is_selected():
+        logger.info("Final step checkbox already selected")
+        return
+
+    try:
+        checkbox.click()
+    except Exception as checkbox_error:
+        logger.warning("Direct checkbox click failed: %s", checkbox_error)
+
+    if checkbox.is_selected():
+        logger.info("Final step checkbox selected via direct click")
+        return
+
+    try:
+        gdpr_wrapper = final_form.find_element(By.ID, "gdpr")
+        confirmation = gdpr_wrapper.find_element(By.CLASS_NAME, "form-checkbox")
+        logger.info(
+            "Falling back to checkbox wrapper click: %s",
+            confirmation.get_attribute("class"),
+        )
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block: 'center'});", confirmation
+        )
+        confirmation.click()
+    except Exception as confirmation_error:
+        logger.warning("Checkbox wrapper click failed: %s", confirmation_error)
+
+    if checkbox.is_selected():
+        logger.info("Final step checkbox selected via wrapper click")
+        return
+
+    logger.warning("Falling back to JS checkbox selection")
+    driver.execute_script(
+        """
+        arguments[0].checked = true;
+        arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+        arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+        """,
+        checkbox,
+    )
+
+    if not checkbox.is_selected():
+        raise RuntimeError("Final step checkbox could not be selected")
+
+    logger.info("Final step checkbox confirmed")
+
+
+def has_recaptcha_widget(final_form: WebElement) -> bool:
+    return bool(final_form.find_elements(By.ID, "recaptcha-v2"))
+
+
+def get_captcha_provider() -> str:
+    provider = (os.getenv("CAPTCHA_PROVIDER") or "manual").strip().lower()
+    return provider or "manual"
+
+
+def get_manual_captcha_timeout_sec() -> int:
+    timeout_sec = int(os.getenv("CAPTCHA_MANUAL_TIMEOUT_SEC", "600"))
+    if timeout_sec <= 0:
+        raise ValueError("CAPTCHA_MANUAL_TIMEOUT_SEC must be greater than 0")
+    return timeout_sec
+
+
+def format_timeout_window(timeout_sec: int) -> str:
+    minutes, seconds = divmod(timeout_sec, 60)
+    if minutes and seconds:
+        return f"{minutes}m {seconds}s"
+    if minutes:
+        return f"{minutes}m"
+    return f"{seconds}s"
+
+
+def notify_manual_captcha_required(
+    driver: WebDriver,
+    logger: Logger,
+    attempt: int,
+    timeout_sec: int,
+):
+    if attempt == 1:
+        message = (
+            "Manual reCAPTCHA required on step 4.\n\n"
+            "Open the visible Chrome window on this machine, solve the captcha there, "
+            f"and wait up to {format_timeout_window(timeout_sec)}. "
+            "The bot will click Approve automatically."
+        )
+        caption = "Manual captcha required"
+    else:
+        message = (
+            "Step 4 needs the captcha to be solved again.\n\n"
+            "Please refresh or solve the captcha again in the visible Chrome window. "
+            f"The bot will keep waiting for up to {format_timeout_window(timeout_sec)} "
+            "before the second submit attempt."
+        )
+        caption = "Manual captcha required again"
+
+    asyncio.run(notify_bot_with_message(message, logger))
+    make_screenshot(driver, logger, caption=caption)
+
+
+def get_recaptcha_response_value(driver: WebDriver) -> str:
+    final_forms = driver.find_elements(By.ID, "mfa-form4")
+    if not final_forms:
+        return ""
+
+    try:
+        response_field = final_forms[0].find_element(By.ID, "g-recaptcha-response")
+    except Exception:
+        return ""
+
+    return (
+        response_field.get_attribute("value")
+        or response_field.get_attribute("innerHTML")
+        or response_field.text
+        or ""
+    ).strip()
+
+
+def wait_for_manual_captcha_solution(
+    driver: WebDriver,
+    timeout_sec: float,
+    poll_interval_sec: float = 0.5,
+    previous_token: str = "",
+) -> str | None:
+    deadline = time.monotonic() + timeout_sec
+    previous_token = (previous_token or "").strip()
+
+    while time.monotonic() < deadline:
+        current_token = get_recaptcha_response_value(driver)
+        if current_token and current_token != previous_token:
+            return current_token
+
+        time.sleep(poll_interval_sec)
+
+    current_token = get_recaptcha_response_value(driver)
+    if current_token and current_token != previous_token:
+        return current_token
+
+    return None
+
+
+def wait_for_final_submission_result(
+    driver: WebDriver,
+    final_page_url: str,
+    timeout_sec: float = 20,
+    poll_interval_sec: float = 0.5,
+) -> tuple[RunOutcome, str | None]:
+    deadline = time.monotonic() + timeout_sec
+
+    while time.monotonic() < deadline:
+        if has_left_final_step(driver, final_page_url):
+            return RunOutcome.APPROVED, None
+
+        error_text = get_visible_step4_error_text(driver)
+        if error_text:
+            return classify_step4_error_text(error_text), error_text
+
+        time.sleep(poll_interval_sec)
+
+    if has_left_final_step(driver, final_page_url):
+        return RunOutcome.APPROVED, None
+
+    error_text = get_visible_step4_error_text(driver)
+    if error_text:
+        return classify_step4_error_text(error_text), error_text
+
+    raise TimeoutException("Timed out waiting for the fourth-step submission result")
+
+
+def get_visible_step4_error_text(driver: WebDriver) -> str | None:
+    for final_form in driver.find_elements(By.ID, "mfa-form4"):
+        if not final_form.is_displayed():
+            continue
+
+        for notification in final_form.find_elements(By.CLASS_NAME, "info-notification"):
+            if not notification.is_displayed():
+                continue
+
+            try:
+                question = notification.find_element(By.CLASS_NAME, "text--question")
+            except Exception:
+                continue
+
+            text = normalize_step4_error_text(question.text)
+            if text:
+                return text
+
+    return None
+
+
+def extract_step4_error_text_from_html(page_html: str) -> str | None:
+    match = re.search(
+        r'<div[^>]*class="[^"]*info-notification[^"]*"[^>]*>.*?<p[^>]*class="[^"]*text--question[^"]*"[^>]*>(.*?)</p>',
+        page_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+
+    text = re.sub(r"<[^>]+>", "", match.group(1))
+    return normalize_step4_error_text(html.unescape(text))
+
+
+def normalize_step4_error_text(error_text: str | None) -> str | None:
+    if error_text is None:
+        return None
+
+    normalized = " ".join(error_text.split()).strip()
+    return normalized or None
+
+
+def classify_step4_error_text(error_text: str) -> RunOutcome:
+    normalized = (error_text or "").lower()
+    if "verification code is incorrect" in normalized:
+        return RunOutcome.CAPTCHA_FAILED
+    return RunOutcome.FAILED
+
+
+def notify_step4_failure(logger: Logger, error_text: str):
+    if not error_text:
+        return
+
+    try:
+        asyncio.run(notify_bot_with_message(f"Fourth step failed: {error_text}", logger))
+    except Exception as notification_error:
+        logger.error("Failed to notify step 4 failure: %s", notification_error)
 
 
 def choose_time_after_noon(driver: WebDriver, logger: Logger, min_hour: int = 12):

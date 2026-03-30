@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from threading import Lock, Thread
 from typing import Callable
 
@@ -31,7 +32,9 @@ class SchedulerController:
             return
 
         try:
-            self.shared_driver = self.driver_factory(headless=True)
+            self.shared_driver = self.driver_factory(
+                headless=not self._requires_visible_browser()
+            )
             self.shared_driver.get("https://google.com")
             self.logger.info("Shared Chrome driver initialized")
         except Exception as error:
@@ -126,6 +129,10 @@ class SchedulerController:
         from init_chromium import init_chromium
 
         return init_chromium(headless=headless)
+
+    @staticmethod
+    def _requires_visible_browser() -> bool:
+        return (os.getenv("CAPTCHA_PROVIDER") or "manual").strip().lower() == "manual"
 
     def shutdown(self):
         if self.shared_driver is None:

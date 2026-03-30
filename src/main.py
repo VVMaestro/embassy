@@ -39,8 +39,8 @@ def main():
         logger=logging.getLogger("telegram_control"),
     )
 
-    period = int(os.getenv("SCHEDULER_PERIOD_IN_MINUTES", 1))
-    schedule.every(period).minutes.do(controller.start_run_process)
+    period = int(os.getenv("SCHEDULER_PERIOD_IN_SECONDS", 30))
+    schedule.every(period).seconds.do(controller.start_run_process)
 
     stop_event = Event()
     scheduler_thread = Thread(

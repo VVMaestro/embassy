@@ -14,7 +14,7 @@ logging.basicConfig(
 
 run_logger = logging.getLogger("run")
 
-driver = init_chromium(headless=True)
+driver = init_chromium(headless=False)
 
 outcome = job_func(run_logger, driver)
 run_logger.info("Manual run completed with outcome: %s", outcome.value)

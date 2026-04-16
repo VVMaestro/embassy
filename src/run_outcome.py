@@ -3,6 +3,7 @@ from enum import Enum
 
 class RunOutcome(str, Enum):
     APPROVED = "APPROVED"
+    AWAITING_MANUAL_SUBMIT = "AWAITING_MANUAL_SUBMIT"
     NO_SLOT = "NO_SLOT"
     CAPTCHA_FAILED = "CAPTCHA_FAILED"
     FAILED = "FAILED"

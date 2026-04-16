@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from threading import Lock, Thread
 from typing import Callable
 
@@ -25,9 +24,15 @@ class SchedulerController:
         self.thread_lock = Lock()
         self.driver_lock = Lock()
         self.shared_driver = None
+        self.driver_reset_required = False
         self.next_thread_id = 1
 
     def init_shared_driver(self):
+        if self.driver_reset_required:
+            self.logger.info("Resetting shared Chrome driver before next run")
+            self.shutdown()
+            self.driver_reset_required = False
+
         if self.shared_driver is not None:
             return
 
@@ -100,6 +105,27 @@ class SchedulerController:
 
     def handle_outcome(self, outcome: RunOutcome, logger: logging.Logger):
         if outcome != RunOutcome.APPROVED:
+            if outcome != RunOutcome.AWAITING_MANUAL_SUBMIT:
+                return
+
+            state = self.state_store.disable("awaiting_manual_submit")
+            self.driver_reset_required = True
+            logger.info("Bot auto-disabled because step 4 is waiting for manual submit")
+
+            try:
+                from job import notify_bot_with_message
+
+                asyncio.run(
+                    notify_bot_with_message(
+                        "Step 4 is ready for manual completion. Bot paused automatically.\n\n"
+                        "Use the visible Chrome window to finish the last form. "
+                        "When you want the bot to search again later, enable it and it will start with a fresh browser session.\n\n"
+                        f"Updated at: {state.updated_at}",
+                        logger,
+                    )
+                )
+            except Exception as error:
+                logger.error("Failed to send manual-submit notification: %s", error)
             return
 
         state = self.state_store.mark_approved_and_disable()
@@ -132,7 +158,7 @@ class SchedulerController:
 
     @staticmethod
     def _requires_visible_browser() -> bool:
-        return (os.getenv("CAPTCHA_PROVIDER") or "manual").strip().lower() == "manual"
+        return True
 
     def shutdown(self):
         if self.shared_driver is None:
